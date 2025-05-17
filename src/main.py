@@ -18,6 +18,9 @@ from personal import (
     show_personal_miss_details,
     show_personal_summary,
 )
+from data_science import (
+    show_time_analysis,
+)
 
 # srcディレクトリをPythonパスに追加
 src_path = str(Path(__file__).parent.parent.parent)
@@ -118,6 +121,13 @@ def show_personal_analysis(scores, misses, users):
         show_personal_miss_details(user_misses, selected_user)
 
 
+def show_data_science_analysis(scores, misses, users):
+    """データサイエンス分析を表示"""
+    # 時間帯分析
+    st.subheader("⏰ 時間帯分析")
+    show_time_analysis(scores)
+
+
 def main():
     # ページ設定
     st.set_page_config(
@@ -178,7 +188,7 @@ def main():
     users.sort()
 
     # タブの作成
-    tab1, tab2 = st.tabs(["📊 全体分析", "👤 個人分析"])
+    tab1, tab2, tab3 = st.tabs(["📊 全体分析", "👤 個人分析", "📈 データサイエンス"])
 
     # 全体分析タブ
     with tab1:
@@ -187,6 +197,10 @@ def main():
     # 個人分析タブ
     with tab2:
         show_personal_analysis(scores, misses, users)
+
+    # データサイエンス分析タブ
+    with tab3:
+        show_data_science_analysis(scores, misses, users)
 
 
 if __name__ == "__main__":
