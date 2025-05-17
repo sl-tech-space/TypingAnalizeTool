@@ -17,7 +17,15 @@ def show_personal_miss_chart(user_misses: pl.DataFrame, username: str):
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("ミスタイプデータがありません")
+        st.markdown(
+            """
+            <div class="ranking-text">
+                <span class="rank-number">-</span>
+                ミスタイプデータがありません
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def show_personal_miss_details(user_misses: pl.DataFrame, username: str):
@@ -26,22 +34,24 @@ def show_personal_miss_details(user_misses: pl.DataFrame, username: str):
     miss_chars = analyze_misses(user_misses)
 
     if len(miss_chars) > 0:
-        # 詳細情報を表示
-        total_misses = miss_chars["miss_count"].sum()
-        top_miss = miss_chars.row(0, named=True)
-        top10_percentage = miss_chars.head(10)["miss_count"].sum() / total_misses * 100
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("総ミスタイプ数", f"{total_misses:,}回")
-        with col2:
-            st.metric(
-                "最多ミスタイプ", f"{top_miss['char']}", f"{top_miss['miss_count']:,}回"
+        # 上位5件のミスタイプを表示
+        for i, row in enumerate(miss_chars.head(5).iter_rows(named=True), 1):
+            rank_class = f"rank-{i}" if i <= 3 else "rank-other"
+            rank_text = f"{i}位"
+            st.markdown(
+                f'<div class="ranking-text {rank_class}"><span class="rank-number">{rank_text}</span> {row["char"]} <span class="rank-score">{row["miss_count"]:,}回</span></div>',
+                unsafe_allow_html=True,
             )
-        with col3:
-            st.metric("上位10件の割合", f"{top10_percentage:.1f}%")
     else:
-        st.info("ミスタイプデータがありません")
+        st.markdown(
+            """
+            <div class="ranking-text">
+                <span class="rank-number">-</span>
+                ミスタイプデータがありません
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def analyze_misses(misses: pl.DataFrame) -> pl.DataFrame:

@@ -17,7 +17,6 @@ from personal import (
     show_personal_miss_chart,
     show_personal_miss_details,
     show_personal_summary,
-    show_personal_mode_score_trends,
 )
 
 # srcディレクトリをPythonパスに追加
@@ -35,6 +34,7 @@ def load_css():
         "base.css",  # 基本レイアウト
         "ranking.css",  # ランキング表示用
         "summary.css",  # サマリー表示用
+        "growth.css",  # 成長率分析用
     ]
 
     # 各CSSファイルを読み込む
@@ -94,7 +94,6 @@ def show_personal_analysis(scores, misses, users):
     selected_user = st.selectbox(
         "分析するユーザーを選択",
         users,
-        help="分析したいユーザーを選択してください",
         key="user_selector",
     )
 
@@ -103,15 +102,12 @@ def show_personal_analysis(scores, misses, users):
     user_misses = misses.filter(pl.col("username") == selected_user)
 
     # 個人サマリーを表示
+    st.subheader("👤 個人サマリー")
     show_personal_summary(user_scores, user_misses)
 
     # 成長率分析
     st.subheader("👑 成長率分析")
     show_growth_analysis(user_scores)
-
-    # 個人モード別スコア推移
-    st.subheader("👑 個人モード別スコア推移")
-    show_personal_mode_score_trends(user_scores)
 
     # 個人ミスタイプ分析
     st.subheader("💬 個人ミスタイプ分析")
