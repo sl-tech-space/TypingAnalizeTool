@@ -10,3 +10,5 @@ pytest==7.4.0
 black==23.7.0
 mypy==1.5.1
 plotly==5.18.0
+pandas==2.2.1
+python-dotenv==1.0.1
