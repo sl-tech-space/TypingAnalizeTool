@@ -17,13 +17,13 @@ def load_data():
     root_dir = Path(__file__).parent.parent
 
     # スコアデータの読み込み
-    scores = pl.read_csv(root_dir / "data" / "t_score.csv", try_parse_dates=True)
+    scores = pl.read_csv(root_dir / "t_score.csv", try_parse_dates=True)
 
     # ミスタイプデータの読み込み
-    misses = pl.read_csv(root_dir / "data" / "t_miss.csv", try_parse_dates=True)
+    misses = pl.read_csv(root_dir / "t_miss.csv", try_parse_dates=True)
 
     # ユーザーデータの読み込み
-    users = pl.read_csv(root_dir / "data" / "m_user.csv", try_parse_dates=True)
+    users = pl.read_csv(root_dir / "m_user.csv", try_parse_dates=True)
 
     # 必要なカラムのみを選択
     scores = scores.select(

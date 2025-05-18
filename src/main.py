@@ -2,7 +2,9 @@ import sys
 from pathlib import Path
 import streamlit as st
 import polars as pl
-from loader import load_data
+import pandas as pd
+import os
+from dotenv import load_dotenv
 from overall import (
     show_growth_ranking,
     show_growth_ranking_details,
@@ -29,6 +31,87 @@ from data_science import (
 src_path = str(Path(__file__).parent.parent.parent)
 if src_path not in sys.path:
     sys.path.append(src_path)
+
+DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR.mkdir(exist_ok=True)
+
+
+def load_and_process_data(_scores_data, _misses_data, _users_data):
+    """データの読み込みと前処理を行う"""
+    try:
+        if all(
+            [
+                _scores_data is not None,
+                _misses_data is not None,
+                _users_data is not None,
+            ]
+        ):
+            # データの型変換を明示的に行う
+            scores = _scores_data.with_columns(
+                [
+                    pl.col("created_at")
+                    .str.replace("\\+00$", "")
+                    .str.to_datetime(format="%Y-%m-%d %H:%M:%S.%f", strict=False),
+                    pl.col("score").cast(pl.Float64),
+                    pl.col("user_id").cast(pl.Utf8),
+                    pl.col("diff_id").cast(pl.Int64),
+                    pl.col("lang_id").cast(pl.Int64),
+                    pl.col("accuracy").cast(pl.Float64),
+                    pl.col("typing_count").cast(pl.Int64),
+                ]
+            )
+
+            misses = _misses_data.with_columns(
+                [
+                    pl.col("created_at")
+                    .str.replace("\\+00$", "")
+                    .str.to_datetime(format="%Y-%m-%d %H:%M:%S.%f", strict=False),
+                    pl.col("user_id").cast(pl.Utf8),
+                    pl.col("miss_count").cast(pl.Int64),
+                ]
+            )
+
+            users = _users_data.with_columns(
+                [
+                    pl.col("created_at")
+                    .str.replace("\\+00$", "")
+                    .str.to_datetime(format="%Y-%m-%d %H:%M:%S.%f", strict=False),
+                    pl.col("user_id").cast(pl.Utf8),
+                ]
+            )
+
+            # ユーザー情報を結合
+            scores = scores.join(
+                users.select(["user_id", "username"]), on="user_id", how="left"
+            )
+            misses = misses.join(
+                users.select(["user_id", "username"]), on="user_id", how="left"
+            )
+
+            # データの存在確認
+            if scores.shape[0] > 0 and misses.shape[0] > 0 and users.shape[0] > 0:
+                return scores, misses, users
+    except Exception as e:
+        st.error(f"データの処理中にエラーが発生しました: {str(e)}")
+    return None, None, None
+
+
+def save_uploaded_file(file, filename):
+    """アップロードされたファイルを保存"""
+    with open(DATA_DIR / filename, "wb") as f:
+        f.write(file.getbuffer())
+
+
+def load_saved_data():
+    """保存されたデータを読み込む"""
+    scores, misses, users = None, None, None
+    if (DATA_DIR / "score.csv").exists():
+        scores = pl.read_csv(DATA_DIR / "score.csv")
+    if (DATA_DIR / "miss.csv").exists():
+        misses = pl.read_csv(DATA_DIR / "miss.csv")
+    if (DATA_DIR / "user.csv").exists():
+        users = pl.read_csv(DATA_DIR / "user.csv")
+    return scores, misses, users
 
 
 def load_css():
@@ -59,6 +142,18 @@ def load_css():
 
 def show_overall_analysis(scores, misses, users):
     """全体分析を表示"""
+    # データの前処理
+    scores = scores.with_columns(
+        [
+            pl.col("username").fill_null("不明"),  # usernameがnullの場合は"不明"を設定
+        ]
+    )
+    misses = misses.with_columns(
+        [
+            pl.col("username").fill_null("不明"),  # usernameがnullの場合は"不明"を設定
+        ]
+    )
+
     # 全体サマリーを表示
     st.subheader("👑 全体サマリー")
     show_overall_summary(scores, misses)
@@ -96,16 +191,42 @@ def show_overall_analysis(scores, misses, users):
 
 def show_personal_analysis(scores, misses, users):
     """個人分析を表示"""
-    # ユーザー選択
+    # ユーザー選択（ユーザー名のリストを取得してソート）
+    usernames = users.select("username").unique().sort("username").to_series().to_list()
+    if not usernames:
+        st.error("ユーザーデータが見つかりません")
+        return
+
+    # セッション状態の初期化
+    if "selected_user" not in st.session_state:
+        st.session_state.selected_user = usernames[0]
+
+    # ユーザー選択ボックスの表示
     selected_user = st.selectbox(
         "分析するユーザーを選択",
-        users,
+        usernames,
         key="user_selector",
+        index=usernames.index(st.session_state.selected_user),
     )
 
-    # ユーザーデータの取得
-    user_scores = scores.filter(pl.col("username") == selected_user)
-    user_misses = misses.filter(pl.col("username") == selected_user)
+    # 選択されたユーザーをセッション状態に保存
+    st.session_state.selected_user = selected_user
+
+    # 選択されたユーザーのデータを取得
+    user_data = users.filter(pl.col("username") == selected_user)
+    if user_data.shape[0] == 0:
+        st.error(f"ユーザー {selected_user} のデータが見つかりません")
+        return
+
+    user_id = user_data.select("user_id").item()
+
+    # ユーザーのスコアとミスデータを取得
+    user_scores = scores.filter(pl.col("user_id") == user_id)
+    user_misses = misses.filter(pl.col("user_id") == user_id)
+
+    if user_scores.shape[0] == 0:
+        st.warning(f"ユーザー {selected_user} のスコアデータが見つかりません")
+        return
 
     # 個人サマリーを表示
     st.subheader("👤 個人サマリー")
@@ -126,6 +247,15 @@ def show_personal_analysis(scores, misses, users):
 
 def show_data_science_analysis(scores, misses, users):
     """データサイエンス分析を表示"""
+    # データの前処理
+    scores = scores.with_columns(
+        [
+            pl.col("diff_id")
+            .map_dict({1: "イージー", 2: "ノーマル", 3: "ハード"})
+            .alias("difficulty"),
+            pl.col("lang_id").map_dict({1: "日本語", 2: "英語"}).alias("language"),
+        ]
+    )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -147,6 +277,180 @@ def show_data_science_analysis(scores, misses, users):
         show_difficulty_language_accuracy_analysis(scores)
 
 
+def check_password():
+    """パスワードチェック"""
+    # .envファイルからパスワードを読み込む
+    load_dotenv()
+    correct_password = os.getenv("UPLOAD_PASSWORD")
+    if not correct_password:
+        st.error("環境変数UPLOAD_PASSWORDが設定されていません。")
+        return False
+
+    # セッション状態の初期化
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
+    if "password_attempted" not in st.session_state:
+        st.session_state.password_attempted = False
+
+    def password_entered():
+        if "password" in st.session_state:
+            st.session_state.password_attempted = True
+            if st.session_state.password == correct_password:
+                st.session_state.password_correct = True
+                del st.session_state.password
+            else:
+                st.session_state.password_correct = False
+
+    if not st.session_state.password_correct:
+        st.text_input(
+            "パスワードを入力してください",
+            type="password",
+            on_change=password_entered,
+            key="password",
+        )
+        if (
+            st.session_state.password_attempted
+            and not st.session_state.password_correct
+        ):
+            st.error("😕 パスワードが正しくありません")
+        return False
+    else:
+        return True
+
+
+def show_data_upload():
+    """データアップロード画面を表示"""
+    if not check_password():
+        return
+
+    st.subheader("📤 CSVファイルのアップロード")
+
+    # データの読み込み状態を表示
+    data_loaded = (
+        st.session_state.scores_data is not None
+        and st.session_state.misses_data is not None
+        and st.session_state.users_data is not None
+        and st.session_state.scores_data.shape[0] > 0
+        and st.session_state.misses_data.shape[0] > 0
+        and st.session_state.users_data.shape[0] > 0
+    )
+
+    if data_loaded:
+        st.success("✅ データの読み込みが完了しました")
+        st.write("読み込まれたデータの件数:")
+        st.write(f"- スコアデータ: {st.session_state.scores_data.shape[0]}件")
+        st.write(f"- ミスタイプデータ: {st.session_state.misses_data.shape[0]}件")
+        st.write(f"- ユーザーデータ: {st.session_state.users_data.shape[0]}件")
+
+    # スコアデータのアップロード
+    st.write("### スコアデータ")
+    score_file = st.file_uploader(
+        "スコアデータをアップロード",
+        type="csv",
+        key="score_upload",
+        help="スコアデータのCSVファイルをドラッグ＆ドロップまたはクリックして選択",
+    )
+    if score_file is not None:
+        try:
+            # 直接Polarsで読み込む
+            df = pl.read_csv(score_file)
+            st.write("プレビュー:", df.head())
+            if st.button("スコアデータを読み込み", key="load_score"):
+                # 必要なカラムを選択
+                required_columns = [
+                    "user_id",
+                    "diff_id",
+                    "lang_id",
+                    "score",
+                    "accuracy",
+                    "typing_count",
+                    "created_at",
+                ]
+                if all(col in df.columns for col in required_columns):
+                    # ファイルを保存
+                    save_uploaded_file(score_file, "score.csv")
+                    st.session_state.scores_data = df.select(required_columns)
+                    st.success("スコアデータを読み込みました！")
+                    st.rerun()
+                else:
+                    st.error(
+                        "必要なカラムが不足しています。以下のカラムが必要です："
+                        + ", ".join(required_columns)
+                    )
+        except Exception as e:
+            st.error(f"スコアデータの読み込みに失敗しました: {str(e)}")
+
+    # ミスタイプデータのアップロード
+    st.write("### ミスタイプデータ")
+    miss_file = st.file_uploader(
+        "ミスタイプデータをアップロード",
+        type="csv",
+        key="miss_upload",
+        help="ミスタイプデータのCSVファイルをドラッグ＆ドロップまたはクリックして選択",
+    )
+    if miss_file is not None:
+        try:
+            # 直接Polarsで読み込む
+            df = pl.read_csv(miss_file)
+            st.write("プレビュー:", df.head())
+            if st.button("ミスタイプデータを読み込み", key="load_miss"):
+                required_columns = ["user_id", "miss_char", "miss_count", "created_at"]
+                if all(col in df.columns for col in required_columns):
+                    # ファイルを保存
+                    save_uploaded_file(miss_file, "miss.csv")
+                    st.session_state.misses_data = df.select(required_columns)
+                    st.success("ミスタイプデータを読み込みました！")
+                    st.rerun()
+                else:
+                    st.error(
+                        "必要なカラムが不足しています。以下のカラムが必要です："
+                        + ", ".join(required_columns)
+                    )
+        except Exception as e:
+            st.error(f"ミスタイプデータの読み込みに失敗しました: {str(e)}")
+
+    # ユーザーデータのアップロード
+    st.write("### ユーザーデータ")
+    user_file = st.file_uploader(
+        "ユーザーデータをアップロード",
+        type="csv",
+        key="user_upload",
+        help="ユーザーデータのCSVファイルをドラッグ＆ドロップまたはクリックして選択",
+    )
+    if user_file is not None:
+        try:
+            # 直接Polarsで読み込む
+            df = pl.read_csv(user_file)
+            st.write("プレビュー:", df.head())
+            if st.button("ユーザーデータを読み込み", key="load_user"):
+                required_columns = ["user_id", "username", "created_at"]
+                if all(col in df.columns for col in required_columns):
+                    # ファイルを保存
+                    save_uploaded_file(user_file, "user.csv")
+                    st.session_state.users_data = df.select(required_columns)
+                    st.success("ユーザーデータを読み込みました！")
+                    st.rerun()
+                else:
+                    st.error(
+                        "必要なカラムが不足しています。以下のカラムが必要です："
+                        + ", ".join(required_columns)
+                    )
+        except Exception as e:
+            st.error(f"ユーザーデータの読み込みに失敗しました: {str(e)}")
+
+    # データのクリアボタン
+    if st.button("データをクリア", key="clear_data"):
+        # ファイルも削除
+        for filename in ["score.csv", "miss.csv", "user.csv"]:
+            file_path = DATA_DIR / filename
+            if file_path.exists():
+                file_path.unlink()
+        st.session_state.scores_data = None
+        st.session_state.misses_data = None
+        st.session_state.users_data = None
+        st.rerun()
+
+
 def main():
     # ページ設定
     st.set_page_config(
@@ -155,6 +459,32 @@ def main():
         layout="wide",
         initial_sidebar_state="collapsed",
     )
+
+    # セッション状態の初期化（一度だけ行う）
+    if "scores_data" not in st.session_state:
+        st.session_state.scores_data = None
+    if "misses_data" not in st.session_state:
+        st.session_state.misses_data = None
+    if "users_data" not in st.session_state:
+        st.session_state.users_data = None
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
+    if "password_attempted" not in st.session_state:
+        st.session_state.password_attempted = False
+
+    # ファイルからの自動復元
+    if (
+        st.session_state.scores_data is None
+        or st.session_state.misses_data is None
+        or st.session_state.users_data is None
+    ):
+        scores, misses, users = load_saved_data()
+        if scores is not None:
+            st.session_state.scores_data = scores
+        if misses is not None:
+            st.session_state.misses_data = misses
+        if users is not None:
+            st.session_state.users_data = users
 
     # CSSの読み込み（ページ設定の後に行う）
     load_css()
@@ -194,32 +524,54 @@ def main():
 
     st.title("⌨️ タイピング分析ダッシュボード")
 
-    # データの読み込み
-    try:
-        scores, misses = load_data()
-    except Exception as e:
-        st.error("データの読み込みに失敗しました。")
-        st.error(str(e))
-        st.stop()
-
-    # ユーザーリストの取得
-    users = scores["username"].unique().to_list()
-    users.sort()
+    # データの読み込みを試みる
+    scores, misses, users = load_and_process_data(
+        st.session_state.scores_data,
+        st.session_state.misses_data,
+        st.session_state.users_data,
+    )
 
     # タブの作成
-    tab1, tab2, tab3 = st.tabs(["📊 全体分析", "👤 個人分析", "📈 データサイエンス"])
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["📊 全体分析", "👤 個人分析", "📈 データサイエンス", "📤 データアップロード"]
+    )
 
-    # 全体分析タブ
-    with tab1:
-        show_overall_analysis(scores, misses, users)
+    # データが読み込めている場合のみ分析タブを表示
+    data_loaded = (
+        scores is not None
+        and misses is not None
+        and users is not None
+        and scores.shape[0] > 0
+        and misses.shape[0] > 0
+        and users.shape[0] > 0
+    )
 
-    # 個人分析タブ
-    with tab2:
-        show_personal_analysis(scores, misses, users)
+    with tab4:
+        show_data_upload()
 
-    # データサイエンス分析タブ
-    with tab3:
-        show_data_science_analysis(scores, misses, users)
+    if data_loaded:
+        with tab1:
+            try:
+                show_overall_analysis(scores, misses, users)
+            except Exception as e:
+                st.error(f"全体分析の表示に失敗: {e}")
+        with tab2:
+            try:
+                show_personal_analysis(scores, misses, users)
+            except Exception as e:
+                st.error(f"個人分析の表示に失敗: {e}")
+        with tab3:
+            try:
+                show_data_science_analysis(scores, misses, users)
+            except Exception as e:
+                st.error(f"データサイエンス分析の表示に失敗: {e}")
+    else:
+        with tab1:
+            st.info("データをアップロードすると分析結果が表示されます。")
+        with tab2:
+            st.info("データをアップロードすると分析結果が表示されます。")
+        with tab3:
+            st.info("データをアップロードすると分析結果が表示されます。")
 
 
 if __name__ == "__main__":
