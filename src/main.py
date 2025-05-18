@@ -19,7 +19,10 @@ from personal import (
     show_personal_summary,
 )
 from data_science import (
-    show_time_analysis,
+    show_difficulty_language_score_analysis,
+    show_difficulty_language_accuracy_analysis,
+    show_time_score_analysis,
+    show_time_accuracy_analysis,
 )
 
 # srcディレクトリをPythonパスに追加
@@ -123,9 +126,25 @@ def show_personal_analysis(scores, misses, users):
 
 def show_data_science_analysis(scores, misses, users):
     """データサイエンス分析を表示"""
-    # 時間帯分析
-    st.subheader("⏰ 時間帯分析")
-    show_time_analysis(scores)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("⏰ 最高スコアが出やすい時間帯")
+        show_time_score_analysis(scores)
+    with col2:
+        st.subheader("🗓️ 最高スコアが出やすい曜日")
+        show_time_accuracy_analysis(scores)
+
+    st.markdown("---")
+
+    # 難易度と言語の組み合わせ分析
+    col3, col4 = st.columns(2)
+    with col3:
+        st.subheader("💯 難易度と言語の組み合わせによる平均スコア")
+        show_difficulty_language_score_analysis(scores)
+    with col4:
+        st.subheader("💯 難易度と言語の組み合わせによる正確性")
+        show_difficulty_language_accuracy_analysis(scores)
 
 
 def main():
