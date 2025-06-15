@@ -26,6 +26,7 @@ from data_science import (
     show_time_score_analysis,
     show_time_accuracy_analysis,
 )
+from loader import load_data
 
 # srcディレクトリをPythonパスに追加
 src_path = str(Path(__file__).parent.parent.parent)
@@ -36,18 +37,18 @@ DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 
-def load_and_process_data(_scores_data, _misses_data, _users_data):
+def load_and_process_data(scores, misses, users):
     """データの読み込みと前処理を行う"""
     try:
         if all(
             [
-                _scores_data is not None,
-                _misses_data is not None,
-                _users_data is not None,
+                scores is not None,
+                misses is not None,
+                users is not None,
             ]
         ):
             # データの型変換を明示的に行う
-            scores = _scores_data.with_columns(
+            scores = scores.with_columns(
                 [
                     pl.col("created_at")
                     .str.replace("\\+00$", "")
@@ -61,7 +62,7 @@ def load_and_process_data(_scores_data, _misses_data, _users_data):
                 ]
             )
 
-            misses = _misses_data.with_columns(
+            misses = misses.with_columns(
                 [
                     pl.col("created_at")
                     .str.replace("\\+00$", "")
@@ -71,21 +72,13 @@ def load_and_process_data(_scores_data, _misses_data, _users_data):
                 ]
             )
 
-            users = _users_data.with_columns(
+            users = users.with_columns(
                 [
                     pl.col("created_at")
                     .str.replace("\\+00$", "")
                     .str.to_datetime(format="%Y-%m-%d %H:%M:%S.%f", strict=False),
                     pl.col("user_id").cast(pl.Utf8),
                 ]
-            )
-
-            # ユーザー情報を結合
-            scores = scores.join(
-                users.select(["user_id", "username"]), on="user_id", how="left"
-            )
-            misses = misses.join(
-                users.select(["user_id", "username"]), on="user_id", how="left"
             )
 
             # データの存在確認
@@ -460,32 +453,6 @@ def main():
         initial_sidebar_state="collapsed",
     )
 
-    # セッション状態の初期化（一度だけ行う）
-    if "scores_data" not in st.session_state:
-        st.session_state.scores_data = None
-    if "misses_data" not in st.session_state:
-        st.session_state.misses_data = None
-    if "users_data" not in st.session_state:
-        st.session_state.users_data = None
-    if "password_correct" not in st.session_state:
-        st.session_state.password_correct = False
-    if "password_attempted" not in st.session_state:
-        st.session_state.password_attempted = False
-
-    # ファイルからの自動復元
-    if (
-        st.session_state.scores_data is None
-        or st.session_state.misses_data is None
-        or st.session_state.users_data is None
-    ):
-        scores, misses, users = load_saved_data()
-        if scores is not None:
-            st.session_state.scores_data = scores
-        if misses is not None:
-            st.session_state.misses_data = misses
-        if users is not None:
-            st.session_state.users_data = users
-
     # CSSの読み込み（ページ設定の後に行う）
     load_css()
 
@@ -525,16 +492,15 @@ def main():
     st.title("⌨️ タイピング分析ダッシュボード")
 
     # データの読み込みを試みる
-    scores, misses, users = load_and_process_data(
-        st.session_state.scores_data,
-        st.session_state.misses_data,
-        st.session_state.users_data,
-    )
+    try:
+        scores, misses, users = load_data()
+        scores, misses, users = load_and_process_data(scores, misses, users)
+    except Exception as e:
+        st.error(f"データの読み込みに失敗しました: {str(e)}")
+        scores, misses, users = None, None, None
 
     # タブの作成
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["📊 全体分析", "👤 個人分析", "📈 データサイエンス", "📤 データアップロード"]
-    )
+    tab1, tab2, tab3 = st.tabs(["📊 全体分析", "👤 個人分析", "📈 データサイエンス"])
 
     # データが読み込めている場合のみ分析タブを表示
     data_loaded = (
@@ -545,9 +511,6 @@ def main():
         and misses.shape[0] > 0
         and users.shape[0] > 0
     )
-
-    with tab4:
-        show_data_upload()
 
     if data_loaded:
         with tab1:
@@ -567,11 +530,11 @@ def main():
                 st.error(f"データサイエンス分析の表示に失敗: {e}")
     else:
         with tab1:
-            st.info("データをアップロードすると分析結果が表示されます。")
+            st.info("data/ディレクトリに必要なデータファイルが存在しません。")
         with tab2:
-            st.info("データをアップロードすると分析結果が表示されます。")
+            st.info("data/ディレクトリに必要なデータファイルが存在しません。")
         with tab3:
-            st.info("データをアップロードすると分析結果が表示されます。")
+            st.info("data/ディレクトリに必要なデータファイルが存在しません。")
 
 
 if __name__ == "__main__":
