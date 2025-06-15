@@ -3,20 +3,35 @@ import polars as pl
 from utils.charts.bar_chart import create_bar_chart
 
 
-def show_average_score(scores: pl.DataFrame, users: pl.DataFrame):
-    """平均スコアを表示"""
+def show_average_score(avg_df: pl.DataFrame):
+    """平均スコアランキングを表示"""
+    # グラフ表示
+    st.plotly_chart(
+        create_bar_chart(
+            avg_df,
+            x_col="username",
+            y_col="average_score",
+            title="平均スコアランキング",
+        ),
+        use_container_width=True,
+    )
+
+
+def calculate_average_score(scores: pl.DataFrame) -> pl.DataFrame:
+    """平均スコアランキングを計算"""
     # ユーザーごとの平均スコアを計算
     avg_scores = (
         scores.group_by("username")
-        .agg(pl.col("score").mean().alias("average_score"))
+        .agg(
+            [
+                pl.col("score").mean().alias("average_score"),
+                pl.col("score").count().alias("play_count"),
+            ]
+        )
         .sort("average_score", descending=True)
     )
 
-    # チャートを表示
-    fig = create_bar_chart(
-        avg_scores.rename({"average_score": "score"}), "username", "score"
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    return avg_scores
 
 
 def show_average_score_details(scores: pl.DataFrame, users: pl.DataFrame):

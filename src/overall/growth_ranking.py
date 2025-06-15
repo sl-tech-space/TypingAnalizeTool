@@ -3,17 +3,18 @@ import polars as pl
 from utils.charts.bar_chart import create_bar_chart
 
 
-def show_growth_ranking(scores: pl.DataFrame, users: pl.DataFrame):
+def show_growth_ranking(growth_df: pl.DataFrame):
     """成長率ランキングを表示"""
-    # 成長率ランキングを計算
-    growth_rates = calculate_growth_ranking(scores)
-
-    if len(growth_rates) > 0:
-        # チャートを表示
-        fig = create_bar_chart(growth_rates, "username", "total_growth_rate")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("成長率データがありません")
+    # グラフ表示
+    st.plotly_chart(
+        create_bar_chart(
+            growth_df,
+            x_col="username",
+            y_col="total_growth_rate",
+            title="成長率ランキング",
+        ),
+        use_container_width=True,
+    )
 
 
 def show_growth_ranking_details(scores: pl.DataFrame, users: pl.DataFrame):

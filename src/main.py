@@ -13,6 +13,8 @@ from overall import (
     show_overall_miss_chart,
     show_overall_miss_details,
     show_overall_summary,
+    calculate_growth_ranking,
+    calculate_average_score,
 )
 from personal import (
     show_growth_analysis,
@@ -153,21 +155,75 @@ def show_overall_analysis(scores, misses, users):
 
     st.markdown("---")
 
-    # 成長率ランキングとモード別プレイ回数を横並びに表示
+    # 成長率ランキングを表示
     st.subheader("👑 成長率ランキング")
+
+    # 月ごとの成長率ランキングを計算
+    overall_growth_df = calculate_growth_ranking(scores)
+    april_growth_df = calculate_growth_ranking(
+        scores.filter(pl.col("created_at").dt.month() == 4)
+    )
+    may_growth_df = calculate_growth_ranking(
+        scores.filter(pl.col("created_at").dt.month() == 5)
+    )
+    june_growth_df = calculate_growth_ranking(
+        scores.filter(pl.col("created_at").dt.month() == 6)
+    )
+
+    # 月選択用のプルダウンメニュー
+    month_options = {
+        "全体": overall_growth_df,
+        "4月": april_growth_df,
+        "5月": may_growth_df,
+        "6月": june_growth_df,
+    }
+
+    # プルダウンメニューを全体幅で表示
+    selected_month = st.selectbox("期間を選択", list(month_options.keys()), index=0)
+    selected_df = month_options[selected_month]
+
+    # 成長率ランキングと詳細を横並びに表示
     col1, col2 = st.columns([2, 1])
     with col1:
-        show_growth_ranking(scores, users)
+        show_growth_ranking(selected_df)
     with col2:
         show_growth_ranking_details(scores, users)
 
     st.markdown("---")
 
-    # 平均スコアとプレイ回数を横並びに表示
+    # 平均スコアランキングを表示
     st.subheader("👑 平均スコアランキング")
+
+    # 月ごとの平均スコアランキングを計算
+    overall_avg_df = calculate_average_score(scores)
+    april_avg_df = calculate_average_score(
+        scores.filter(pl.col("created_at").dt.month() == 4)
+    )
+    may_avg_df = calculate_average_score(
+        scores.filter(pl.col("created_at").dt.month() == 5)
+    )
+    june_avg_df = calculate_average_score(
+        scores.filter(pl.col("created_at").dt.month() == 6)
+    )
+
+    # 月選択用のプルダウンメニュー
+    avg_month_options = {
+        "全体": overall_avg_df,
+        "4月": april_avg_df,
+        "5月": may_avg_df,
+        "6月": june_avg_df,
+    }
+
+    # プルダウンメニューを全体幅で表示
+    selected_avg_month = st.selectbox(
+        "期間を選択", list(avg_month_options.keys()), index=0, key="avg_month"
+    )
+    selected_avg_df = avg_month_options[selected_avg_month]
+
+    # 平均スコアランキングと詳細を横並びに表示
     col3, col4 = st.columns([2, 1])
     with col3:
-        show_average_score(scores, users)
+        show_average_score(selected_avg_df)
     with col4:
         show_average_score_details(scores, users)
 
@@ -503,7 +559,7 @@ def main():
         unsafe_allow_html=True,
     )
 
-    st.title("⌨️ タイピング分析ダッシュボード")
+    st.title("⌨️ 新卒Saltypeスコア分析")
 
     # データの読み込みを試みる
     try:
