@@ -184,14 +184,26 @@ def show_overall_analysis(scores, misses, users):
 
 def show_personal_analysis(scores, misses, users):
     """個人分析を表示"""
+    # 新卒ユーザーのみをフィルタリング
+    new_graduate_users = users.filter(pl.col("is_newgraduate") == 1)
+
     # ユーザー選択（ユーザー名のリストを取得してソート）
-    usernames = users.select("username").unique().sort("username").to_series().to_list()
+    usernames = (
+        new_graduate_users.select("username")
+        .unique()
+        .sort("username")
+        .to_series()
+        .to_list()
+    )
     if not usernames:
-        st.error("ユーザーデータが見つかりません")
+        st.error("新卒ユーザーのデータが見つかりません")
         return
 
     # セッション状態の初期化
     if "selected_user" not in st.session_state:
+        st.session_state.selected_user = usernames[0]
+    elif st.session_state.selected_user not in usernames:
+        # 現在選択されているユーザーが新卒ユーザーリストに存在しない場合
         st.session_state.selected_user = usernames[0]
 
     # ユーザー選択ボックスの表示
@@ -203,10 +215,12 @@ def show_personal_analysis(scores, misses, users):
     )
 
     # 選択されたユーザーをセッション状態に保存
-    st.session_state.selected_user = selected_user
+    if selected_user != st.session_state.selected_user:
+        st.session_state.selected_user = selected_user
+        st.rerun()  # 選択が変更された場合にページを再読み込み
 
     # 選択されたユーザーのデータを取得
-    user_data = users.filter(pl.col("username") == selected_user)
+    user_data = new_graduate_users.filter(pl.col("username") == selected_user)
     if user_data.shape[0] == 0:
         st.error(f"ユーザー {selected_user} のデータが見つかりません")
         return
@@ -447,7 +461,7 @@ def show_data_upload():
 def main():
     # ページ設定
     st.set_page_config(
-        page_title="タイピング分析ダッシュボード",
+        page_title="新卒Saltypeスコア分析",
         page_icon="⌨️",
         layout="wide",
         initial_sidebar_state="collapsed",
