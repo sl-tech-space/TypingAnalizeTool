@@ -91,24 +91,6 @@ def load_and_process_data(scores, misses, users):
     return None, None, None
 
 
-def save_uploaded_file(file, filename):
-    """アップロードされたファイルを保存"""
-    with open(DATA_DIR / filename, "wb") as f:
-        f.write(file.getbuffer())
-
-
-def load_saved_data():
-    """保存されたデータを読み込む"""
-    scores, misses, users = None, None, None
-    if (DATA_DIR / "score.csv").exists():
-        scores = pl.read_csv(DATA_DIR / "score.csv")
-    if (DATA_DIR / "miss.csv").exists():
-        misses = pl.read_csv(DATA_DIR / "miss.csv")
-    if (DATA_DIR / "user.csv").exists():
-        users = pl.read_csv(DATA_DIR / "user.csv")
-    return scores, misses, users
-
-
 def load_css():
     """CSSファイルを読み込む"""
     css_dir = Path(__file__).parent / "static"
@@ -150,7 +132,7 @@ def show_overall_analysis(scores, misses, users):
     )
 
     # 全体サマリーを表示
-    st.subheader("👑 全体サマリー")
+    st.subheader("👑 全体成績")
     show_overall_summary(scores, misses)
 
     st.markdown("---")
@@ -243,6 +225,9 @@ def show_personal_analysis(scores, misses, users):
     # 新卒ユーザーのみをフィルタリング
     new_graduate_users = users.filter(pl.col("is_newgraduate") == 1)
 
+    # 個人成績を表示
+    st.subheader("👤 個人成績")
+
     # ユーザー選択（ユーザー名のリストを取得してソート）
     usernames = (
         new_graduate_users.select("username")
@@ -291,8 +276,6 @@ def show_personal_analysis(scores, misses, users):
         st.warning(f"ユーザー {selected_user} のスコアデータが見つかりません")
         return
 
-    # 個人サマリーを表示
-    st.subheader("👤 個人サマリー")
     show_personal_summary(user_scores, user_misses)
 
     # 成長率分析
@@ -333,185 +316,11 @@ def show_data_science_analysis(scores, misses, users):
     # 難易度と言語の組み合わせ分析
     col3, col4 = st.columns(2)
     with col3:
-        st.subheader("💯 難易度と言語の組み合わせによる平均スコア")
+        st.subheader("💯 難易度×言語別平均スコア")
         show_difficulty_language_score_analysis(scores)
     with col4:
-        st.subheader("💯 難易度と言語の組み合わせによる正確性")
+        st.subheader("💯 難易度×言語別正確率")
         show_difficulty_language_accuracy_analysis(scores)
-
-
-def check_password():
-    """パスワードチェック"""
-    # .envファイルからパスワードを読み込む
-    load_dotenv()
-    correct_password = os.getenv("UPLOAD_PASSWORD")
-    if not correct_password:
-        st.error("環境変数UPLOAD_PASSWORDが設定されていません。")
-        return False
-
-    # セッション状態の初期化
-    if "password_correct" not in st.session_state:
-        st.session_state.password_correct = False
-    if "password_attempted" not in st.session_state:
-        st.session_state.password_attempted = False
-
-    def password_entered():
-        if "password" in st.session_state:
-            st.session_state.password_attempted = True
-            if st.session_state.password == correct_password:
-                st.session_state.password_correct = True
-                del st.session_state.password
-            else:
-                st.session_state.password_correct = False
-
-    if not st.session_state.password_correct:
-        st.text_input(
-            "パスワードを入力してください",
-            type="password",
-            on_change=password_entered,
-            key="password",
-        )
-        if (
-            st.session_state.password_attempted
-            and not st.session_state.password_correct
-        ):
-            st.error("😕 パスワードが正しくありません")
-        return False
-    else:
-        return True
-
-
-def show_data_upload():
-    """データアップロード画面を表示"""
-    if not check_password():
-        return
-
-    st.subheader("📤 CSVファイルのアップロード")
-
-    # データの読み込み状態を表示
-    data_loaded = (
-        st.session_state.scores_data is not None
-        and st.session_state.misses_data is not None
-        and st.session_state.users_data is not None
-        and st.session_state.scores_data.shape[0] > 0
-        and st.session_state.misses_data.shape[0] > 0
-        and st.session_state.users_data.shape[0] > 0
-    )
-
-    if data_loaded:
-        st.success("✅ データの読み込みが完了しました")
-        st.write("読み込まれたデータの件数:")
-        st.write(f"- スコアデータ: {st.session_state.scores_data.shape[0]}件")
-        st.write(f"- ミスタイプデータ: {st.session_state.misses_data.shape[0]}件")
-        st.write(f"- ユーザーデータ: {st.session_state.users_data.shape[0]}件")
-
-    # スコアデータのアップロード
-    st.write("### スコアデータ")
-    score_file = st.file_uploader(
-        "スコアデータをアップロード",
-        type="csv",
-        key="score_upload",
-        help="スコアデータのCSVファイルをドラッグ＆ドロップまたはクリックして選択",
-    )
-    if score_file is not None:
-        try:
-            # 直接Polarsで読み込む
-            df = pl.read_csv(score_file)
-            st.write("プレビュー:", df.head())
-            if st.button("スコアデータを読み込み", key="load_score"):
-                # 必要なカラムを選択
-                required_columns = [
-                    "user_id",
-                    "diff_id",
-                    "lang_id",
-                    "score",
-                    "accuracy",
-                    "typing_count",
-                    "created_at",
-                ]
-                if all(col in df.columns for col in required_columns):
-                    # ファイルを保存
-                    save_uploaded_file(score_file, "score.csv")
-                    st.session_state.scores_data = df.select(required_columns)
-                    st.success("スコアデータを読み込みました！")
-                    st.rerun()
-                else:
-                    st.error(
-                        "必要なカラムが不足しています。以下のカラムが必要です："
-                        + ", ".join(required_columns)
-                    )
-        except Exception as e:
-            st.error(f"スコアデータの読み込みに失敗しました: {str(e)}")
-
-    # ミスタイプデータのアップロード
-    st.write("### ミスタイプデータ")
-    miss_file = st.file_uploader(
-        "ミスタイプデータをアップロード",
-        type="csv",
-        key="miss_upload",
-        help="ミスタイプデータのCSVファイルをドラッグ＆ドロップまたはクリックして選択",
-    )
-    if miss_file is not None:
-        try:
-            # 直接Polarsで読み込む
-            df = pl.read_csv(miss_file)
-            st.write("プレビュー:", df.head())
-            if st.button("ミスタイプデータを読み込み", key="load_miss"):
-                required_columns = ["user_id", "miss_char", "miss_count", "created_at"]
-                if all(col in df.columns for col in required_columns):
-                    # ファイルを保存
-                    save_uploaded_file(miss_file, "miss.csv")
-                    st.session_state.misses_data = df.select(required_columns)
-                    st.success("ミスタイプデータを読み込みました！")
-                    st.rerun()
-                else:
-                    st.error(
-                        "必要なカラムが不足しています。以下のカラムが必要です："
-                        + ", ".join(required_columns)
-                    )
-        except Exception as e:
-            st.error(f"ミスタイプデータの読み込みに失敗しました: {str(e)}")
-
-    # ユーザーデータのアップロード
-    st.write("### ユーザーデータ")
-    user_file = st.file_uploader(
-        "ユーザーデータをアップロード",
-        type="csv",
-        key="user_upload",
-        help="ユーザーデータのCSVファイルをドラッグ＆ドロップまたはクリックして選択",
-    )
-    if user_file is not None:
-        try:
-            # 直接Polarsで読み込む
-            df = pl.read_csv(user_file)
-            st.write("プレビュー:", df.head())
-            if st.button("ユーザーデータを読み込み", key="load_user"):
-                required_columns = ["user_id", "username", "created_at"]
-                if all(col in df.columns for col in required_columns):
-                    # ファイルを保存
-                    save_uploaded_file(user_file, "user.csv")
-                    st.session_state.users_data = df.select(required_columns)
-                    st.success("ユーザーデータを読み込みました！")
-                    st.rerun()
-                else:
-                    st.error(
-                        "必要なカラムが不足しています。以下のカラムが必要です："
-                        + ", ".join(required_columns)
-                    )
-        except Exception as e:
-            st.error(f"ユーザーデータの読み込みに失敗しました: {str(e)}")
-
-    # データのクリアボタン
-    if st.button("データをクリア", key="clear_data"):
-        # ファイルも削除
-        for filename in ["score.csv", "miss.csv", "user.csv"]:
-            file_path = DATA_DIR / filename
-            if file_path.exists():
-                file_path.unlink()
-        st.session_state.scores_data = None
-        st.session_state.misses_data = None
-        st.session_state.users_data = None
-        st.rerun()
 
 
 def main():
@@ -520,91 +329,36 @@ def main():
         page_title="新卒Saltypeスコア分析",
         page_icon="⌨️",
         layout="wide",
-        initial_sidebar_state="collapsed",
     )
 
-    # CSSの読み込み（ページ設定の後に行う）
+    # CSSの読み込み
     load_css()
-
-    # カスタムスタイルの追加
-    st.markdown(
-        """
-        <style>
-        /* タブのスタイルを直接指定 */
-        div[data-testid="stTabs"] [data-baseweb="tab-list"] {
-            gap: 2rem !important;
-            padding: 1rem !important;
-        }
-        div[data-testid="stTabs"] [data-baseweb="tab"] {
-            padding: 1rem 2rem !important;
-            margin: 0 1rem !important;
-            font-size: 1.25rem !important;
-        }
-        /* 見出しのスタイルを直接指定 */
-        div[data-testid="stMarkdown"] h1 {
-            font-size: 2.8rem !important;
-            color: white !important;
-            margin: 2rem 0 !important;
-        }
-        div[data-testid="stMarkdown"] h2 {
-            font-size: 2.4rem !important;
-            margin: 1.5rem 0 !important;
-        }
-        div[data-testid="stMarkdown"] h3 {
-            font-size: 2rem !important;
-            margin: 1rem 0 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 
     st.title("⌨️ 新卒Saltypeスコア分析")
 
-    # データの読み込みを試みる
-    try:
-        scores, misses, users = load_data()
-        scores, misses, users = load_and_process_data(scores, misses, users)
-    except Exception as e:
-        st.error(f"データの読み込みに失敗しました: {str(e)}")
-        scores, misses, users = None, None, None
+    # データの読み込み
+    scores, misses, users = load_data()
+    if scores is None or misses is None or users is None:
+        st.error("データの読み込みに失敗しました")
+        return
+
+    # データの前処理
+    scores, misses, users = load_and_process_data(scores, misses, users)
+    if scores is None or misses is None or users is None:
+        st.error("データの処理に失敗しました")
+        return
 
     # タブの作成
-    tab1, tab2, tab3 = st.tabs(["📊 全体分析", "👤 個人分析", "📈 データサイエンス"])
+    tab1, tab2, tab3 = st.tabs(["📊 全体サマリー", "👤 個人サマリー", "📈 データ分析"])
 
-    # データが読み込めている場合のみ分析タブを表示
-    data_loaded = (
-        scores is not None
-        and misses is not None
-        and users is not None
-        and scores.shape[0] > 0
-        and misses.shape[0] > 0
-        and users.shape[0] > 0
-    )
+    with tab1:
+        show_overall_analysis(scores, misses, users)
 
-    if data_loaded:
-        with tab1:
-            try:
-                show_overall_analysis(scores, misses, users)
-            except Exception as e:
-                st.error(f"全体分析の表示に失敗: {e}")
-        with tab2:
-            try:
-                show_personal_analysis(scores, misses, users)
-            except Exception as e:
-                st.error(f"個人分析の表示に失敗: {e}")
-        with tab3:
-            try:
-                show_data_science_analysis(scores, misses, users)
-            except Exception as e:
-                st.error(f"データサイエンス分析の表示に失敗: {e}")
-    else:
-        with tab1:
-            st.info("data/ディレクトリに必要なデータファイルが存在しません。")
-        with tab2:
-            st.info("data/ディレクトリに必要なデータファイルが存在しません。")
-        with tab3:
-            st.info("data/ディレクトリに必要なデータファイルが存在しません。")
+    with tab2:
+        show_personal_analysis(scores, misses, users)
+
+    with tab3:
+        show_data_science_analysis(scores, misses, users)
 
 
 if __name__ == "__main__":
