@@ -11,36 +11,65 @@ def load_data():
     タイピングデータを読み込む
 
     Returns:
-        tuple: (scores, misses) スコアデータとミスタイプデータのタプル
+        tuple: (scores, misses, users) スコアデータ、ミスタイプデータ、ユーザーデータのタプル
     """
-    # プロジェクトのルートディレクトリを取得
-    root_dir = Path(__file__).parent.parent
+    # データディレクトリのパスを取得
+    data_dir = Path(__file__).parent / "data"
 
     # スコアデータの読み込み
-    scores = pl.read_csv(root_dir / "t_score.csv", try_parse_dates=True)
+    scores = pl.read_csv(data_dir / "t_score.csv", try_parse_dates=True)
 
     # ミスタイプデータの読み込み
-    misses = pl.read_csv(root_dir / "t_miss.csv", try_parse_dates=True)
+    misses = pl.read_csv(data_dir / "t_miss.csv", try_parse_dates=True)
 
     # ユーザーデータの読み込み
-    users = pl.read_csv(root_dir / "m_user.csv", try_parse_dates=True)
+    users = pl.read_csv(data_dir / "m_user.csv", try_parse_dates=True)
+
+    # 新卒ユーザーのみをフィルタリング
+    new_graduate_users = users.filter(pl.col("is_newgraduate") == 1)
+    new_graduate_user_ids = new_graduate_users.select("user_id").to_series().to_list()
+
+    # スコアとミスデータを新卒ユーザーのみにフィルタリングし、スコアが500以下のデータを除外
+    scores = scores.filter(
+        (pl.col("user_id").is_in(new_graduate_user_ids)) & (pl.col("score") > 500)
+    )
+    misses = misses.filter(pl.col("user_id").is_in(new_graduate_user_ids))
 
     # 必要なカラムのみを選択
     scores = scores.select(
         [
             "user_id",
-            "diff_id",
-            "lang_id",
             "score",
             "accuracy",
             "typing_count",
             "created_at",
+            "updated_at",
+            "diff_id",
+            "lang_id",
         ]
     )
 
-    misses = misses.select(["user_id", "miss_char", "miss_count", "created_at"])
+    misses = misses.select(
+        [
+            "user_id",
+            "miss_char",
+            "miss_count",
+            "created_at",
+            "updated_at",
+        ]
+    )
 
-    users = users.select(["user_id", "username", "created_at"])
+    users = users.select(
+        [
+            "user_id",
+            "username",
+            "email",
+            "date_joined",
+            "created_at",
+            "updated_at",
+            "is_newgraduate",
+        ]
+    )
 
     # ユーザー情報を結合
     scores = scores.join(
@@ -58,4 +87,4 @@ def load_data():
         ]
     )
 
-    return scores, misses
+    return scores, misses, users
