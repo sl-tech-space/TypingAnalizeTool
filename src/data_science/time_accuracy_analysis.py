@@ -31,14 +31,11 @@ def show_time_analysis_text(scores: pl.DataFrame, is_weekday: bool):
     best_scores = best_scores.with_columns(
         [
             pl.col("best_time")
-            .str.extract(r"(\d{2}):\d{2}:\d{2}")  # 時間部分を抽出
-            .cast(pl.Int64)  # 整数に変換
+            .dt.hour()  # 時間を直接抽出
             .map_elements(lambda x: (x + 9) % 24)  # UTC+9に変換（日本時間）
             .alias("hour"),
             pl.col("best_time")
-            .str.extract(r"(\d{4}-\d{2}-\d{2})")  # 日付部分を抽出
-            .str.strptime(pl.Date, "%Y-%m-%d")  # 日付型に変換
-            .dt.weekday()  # 曜日を取得（0=月曜日）
+            .dt.weekday()  # 曜日を直接取得（0=月曜日）
             .map_elements(lambda x: (x - 1) % 7)  # 曜日を1日ずらす
             .alias("weekday"),
         ]
@@ -118,14 +115,11 @@ def create_weekday_time_heatmap(scores: pl.DataFrame) -> go.Figure:
     best_scores = best_scores.with_columns(
         [
             pl.col("best_time")
-            .str.extract(r"(\d{2}):\d{2}:\d{2}")  # 時間部分を抽出
-            .cast(pl.Int64)  # 整数に変換
+            .dt.hour()  # 時間を直接抽出
             .map_elements(lambda x: (x + 9) % 24)  # UTC+9に変換（日本時間）
             .alias("hour"),
             pl.col("best_time")
-            .str.extract(r"(\d{4}-\d{2}-\d{2})")  # 日付部分を抽出
-            .str.strptime(pl.Date, "%Y-%m-%d")  # 日付型に変換
-            .dt.weekday()  # 曜日を取得（0=月曜日）
+            .dt.weekday()  # 曜日を直接取得（0=月曜日）
             .map_elements(lambda x: (x - 1) % 7)  # 曜日を1日ずらす
             .alias("weekday"),
         ]
@@ -181,16 +175,14 @@ def create_weekday_time_heatmap(scores: pl.DataFrame) -> go.Figure:
             tickmode="linear",
             tick0=start_hour,
             dtick=1,
-            title="時間帯",
-            titlefont=dict(color="white"),
+            title=dict(text="時間帯", font=dict(color="white")),
         ),
         yaxis=dict(
             showgrid=True,
             gridcolor="rgba(255,255,255,0.2)",
             gridwidth=1,
             tickfont=dict(color="white"),
-            title="曜日",
-            titlefont=dict(color="white"),
+            title=dict(text="曜日", font=dict(color="white")),
         ),
         paper_bgcolor="black",
         plot_bgcolor="black",
@@ -215,7 +207,7 @@ def calculate_time_accuracy(scores: pl.DataFrame) -> pl.DataFrame:
     # 曜日の名前を設定
     weekday_names = ["月", "火", "水", "木", "金", "土", "日"]
     scores = scores.with_columns(
-        pl.col("weekday").map_dict(dict(enumerate(weekday_names, 1))).alias("weekday")
+        pl.col("weekday").replace(dict(enumerate(weekday_names, 1))).alias("weekday")
     )
 
     # 時間帯と曜日でグループ化して平均正確性を計算
