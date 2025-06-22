@@ -38,7 +38,7 @@ def load_data():
         # スコアデータの読み込み
         scores_query = """
         SELECT 
-            s.user_id,
+            s.user_id::text as user_id,
             s.score,
             s.accuracy,
             s.typing_count,
@@ -51,25 +51,27 @@ def load_data():
         FROM t_score s
         LEFT JOIN m_diff d ON s.diff_id = d.diff_id
         LEFT JOIN m_lang l ON s.lang_id = l.lang_id
+        WHERE s.user_id IS NOT NULL
         """
-        scores = pl.read_database(scores_query, conn)
+        scores = pl.read_database(scores_query, conn).with_columns(pl.col("user_id").cast(pl.Utf8))
 
         # ミスタイプデータの読み込み
         misses_query = """
         SELECT 
-            user_id,
+            user_id::text as user_id,
             miss_char,
             miss_count,
             created_at,
             updated_at
         FROM t_miss
+        WHERE user_id IS NOT NULL
         """
-        misses = pl.read_database(misses_query, conn)
+        misses = pl.read_database(misses_query, conn).with_columns(pl.col("user_id").cast(pl.Utf8))
 
         # ユーザーデータの読み込み
         users_query = """
         SELECT 
-            user_id,
+            user_id::text as user_id,
             username,
             email,
             date_joined,
@@ -77,17 +79,16 @@ def load_data():
             updated_at,
             is_newgraduate
         FROM m_user
+        WHERE user_id IS NOT NULL
         """
-        users = pl.read_database(users_query, conn)
+        users = pl.read_database(users_query, conn).with_columns(pl.col("user_id").cast(pl.Utf8))
 
         # 接続を閉じる
         conn.close()
 
         # 新卒ユーザーのみをフィルタリング
         new_graduate_users = users.filter(pl.col("is_newgraduate") == 1)
-        new_graduate_user_ids = (
-            new_graduate_users.select("user_id").to_series().to_list()
-        )
+        new_graduate_user_ids = new_graduate_users.select("user_id").to_series().to_list()
 
         # スコアとミスデータを新卒ユーザーのみにフィルタリングし、スコアが500以下のデータを除外
         scores = scores.filter(
@@ -97,10 +98,10 @@ def load_data():
 
         # ユーザー情報を結合
         scores = scores.join(
-            users.select(["user_id", "username"]), on="user_id", how="left"
+            users.select(["user_id", "username"]), on="user_id", how="inner"
         )
         misses = misses.join(
-            users.select(["user_id", "username"]), on="user_id", how="left"
+            users.select(["user_id", "username"]), on="user_id", how="inner"
         )
 
         return scores, misses, users
