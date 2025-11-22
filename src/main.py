@@ -326,7 +326,7 @@ def show_data_science_analysis(scores, misses, users):
 def main():
     # ページ設定
     st.set_page_config(
-        page_title="新卒Saltypeスコア分析",
+        page_title="Saltypeスコア分析ツール",
         page_icon="⌨️",
         layout="wide",
     )
@@ -334,7 +334,7 @@ def main():
     # CSSの読み込み
     load_css()
 
-    st.title("⌨️ 新卒Saltypeスコア分析")
+    st.title("⌨️ Saltypeスコア分析ツール")
 
     # データの読み込み
     scores, misses, users = load_data()
