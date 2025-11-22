@@ -52,9 +52,6 @@ def load_and_process_data(scores, misses, users):
             # データの型変換を明示的に行う
             scores = scores.with_columns(
                 [
-                    pl.col("created_at")
-                    .str.replace("\\+00$", "")
-                    .str.to_datetime(format="%Y-%m-%d %H:%M:%S.%f", strict=False),
                     pl.col("score").cast(pl.Float64),
                     pl.col("user_id").cast(pl.Utf8),
                     pl.col("diff_id").cast(pl.Int64),
@@ -66,9 +63,6 @@ def load_and_process_data(scores, misses, users):
 
             misses = misses.with_columns(
                 [
-                    pl.col("created_at")
-                    .str.replace("\\+00$", "")
-                    .str.to_datetime(format="%Y-%m-%d %H:%M:%S.%f", strict=False),
                     pl.col("user_id").cast(pl.Utf8),
                     pl.col("miss_count").cast(pl.Int64),
                 ]
@@ -76,9 +70,6 @@ def load_and_process_data(scores, misses, users):
 
             users = users.with_columns(
                 [
-                    pl.col("created_at")
-                    .str.replace("\\+00$", "")
-                    .str.to_datetime(format="%Y-%m-%d %H:%M:%S.%f", strict=False),
                     pl.col("user_id").cast(pl.Utf8),
                 ]
             )
@@ -293,16 +284,6 @@ def show_personal_analysis(scores, misses, users):
 
 def show_data_science_analysis(scores, misses, users):
     """データサイエンス分析を表示"""
-    # データの前処理
-    scores = scores.with_columns(
-        [
-            pl.col("diff_id")
-            .map_dict({1: "イージー", 2: "ノーマル", 3: "ハード"})
-            .alias("difficulty"),
-            pl.col("lang_id").map_dict({1: "日本語", 2: "英語"}).alias("language"),
-        ]
-    )
-
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("⏰ 最高スコアが出やすい時間帯")
